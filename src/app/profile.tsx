@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Building2, ShieldCheck, MapPin, Phone, FileText, LogOut, Edit3, Save, RefreshCw } from 'lucide-react-native';
+import { Building2, ShieldCheck, MapPin, Phone, FileText, LogOut, Edit3, Save, RefreshCw, Sparkles } from 'lucide-react-native';
 import { useTheme } from '@/hooks/use-theme';
 import { useMarketplace } from '@/hooks/use-marketplace';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function ProfileScreen() {
   const theme = useTheme();
-  const { userProfile, updateProfile, logoutUser, selectAction, resetAllData } = useMarketplace();
+  const { userProfile, updateProfile, logoutUser, selectAction, resetAllData, resetOnboarding } = useMarketplace();
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(userProfile.name);
@@ -171,8 +171,13 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          {/* Logout & Reset Buttons */}
+          {/* Onboarding Re-play, Logout & Reset Buttons */}
           <View style={styles.footerZone}>
+            <TouchableOpacity style={styles.onboardingBtn} onPress={resetOnboarding}>
+              <Sparkles size={14} color="#2563EB" />
+              <Text style={styles.onboardingBtnText}>Re-play Onboarding Experience</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
               <LogOut size={16} color="#DC2626" />
               <Text style={styles.logoutText}>Logout</Text>
@@ -389,6 +394,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     marginTop: 10,
+  },
+  onboardingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  onboardingBtnText: {
+    color: '#2563EB',
+    fontSize: 12,
+    fontWeight: '700',
   },
   logoutBtn: {
     flexDirection: 'row',

@@ -17,10 +17,10 @@ import {
   XCircle,
   Plus,
   RefreshCw,
-  SlidersHorizontal,
 } from 'lucide-react-native';
 import { useTheme } from '@/hooks/use-theme';
-import { useMarketplace, GARMENT_CATEGORIES, JobWork } from '@/hooks/use-marketplace';
+import { useMarketplace, GARMENT_CATEGORIES } from '@/hooks/use-marketplace';
+import { OnboardingFlow } from '@/components/OnboardingFlow';
 import { ActionSelection } from '@/components/ActionSelection';
 import { PostWorkModal } from '@/components/PostWorkModal';
 import { OpportunityCard } from '@/components/OpportunityCard';
@@ -30,6 +30,7 @@ export default function HomeScreen() {
   const theme = useTheme();
   const {
     userProfile,
+    hasCompletedOnboarding,
     currentAction,
     selectAction,
     jobs,
@@ -41,6 +42,11 @@ export default function HomeScreen() {
   // Search & Filter state for Find Work Feed
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+
+  // STEP A: If onboarding is not completed, show Onboarding Flow
+  if (!hasCompletedOnboarding) {
+    return <OnboardingFlow onComplete={() => {}} />;
+  }
 
   // Filter open jobs
   const openJobs = jobs.filter(job => job.status === 'OPEN');
@@ -60,7 +66,7 @@ export default function HomeScreen() {
     return job.category.toLowerCase() === selectedCategory.toLowerCase();
   });
 
-  // SCREEN 3: If action is not chosen yet, show Action Selection screen
+  // STEP B: If action is not chosen yet, show Action Selection screen
   if (!currentAction) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>

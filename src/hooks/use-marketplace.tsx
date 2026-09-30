@@ -127,6 +127,10 @@ interface MarketplaceContextType {
   logoutUser: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => Promise<void>;
   
+  hasCompletedOnboarding: boolean;
+  completeOnboarding: () => Promise<void>;
+  resetOnboarding: () => Promise<void>;
+
   currentAction: UserAction;
   selectAction: (action: UserAction) => void;
   
@@ -144,6 +148,7 @@ interface MarketplaceContextType {
 const MarketplaceContext = createContext<MarketplaceContextType | undefined>(undefined);
 
 const USER_STORAGE_KEY = '@threadly_user';
+const ONBOARDING_STORAGE_KEY = '@threadly_onboarded';
 const ACTION_STORAGE_KEY = '@threadly_action';
 const JOBS_STORAGE_KEY = '@threadly_jobs';
 const CONTACTS_STORAGE_KEY = '@threadly_contacts';
@@ -253,6 +258,7 @@ const INITIAL_CONTACTS: JobContact[] = [
 
 export function MarketplaceProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_USER);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(false);
   const [currentAction, setCurrentAction] = useState<UserAction>(null);
   const [jobs, setJobs] = useState<JobWork[]>([]);
   const [contacts, setContacts] = useState<JobContact[]>([]);
@@ -263,6 +269,7 @@ export function MarketplaceProvider({ children }: { children: React.ReactNode })
     async function loadStorage() {
       try {
         const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
+        const storedOnboarding = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY);
         const storedAction = await AsyncStorage.getItem(ACTION_STORAGE_KEY);
         const storedJobs = await AsyncStorage.getItem(JOBS_STORAGE_KEY);
         const storedContacts = await AsyncStorage.getItem(CONTACTS_STORAGE_KEY);
@@ -272,6 +279,10 @@ export function MarketplaceProvider({ children }: { children: React.ReactNode })
         } else {
           setUserProfile(DEFAULT_USER);
           await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(DEFAULT_USER));
+        }
+
+        if (storedOnboarding === 'true') {
+          setHasCompletedOnboarding(true);
         }
 
         if (storedAction) {
@@ -300,6 +311,16 @@ export function MarketplaceProvider({ children }: { children: React.ReactNode })
     loadStorage();
   }, []);
 
+  const completeOnboarding = async () => {
+    setHasCompletedOnboarding(true);
+    await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
+  };
+
+  const resetOnboarding = async () => {
+    setHasCompletedOnboarding(false);
+    await AsyncStorage.removeItem(ONBOARDING_STORAGE_KEY);
+  };
+
   const loginUser = async (mobile: string, name = 'Unit Manager', companyName = 'Tiruppur Garments Unit', location = 'PN Road, Tiruppur') => {
     const updatedUser: UserProfile = {
       userId: `usr-${Date.now()}`,
@@ -310,7 +331,7 @@ export function MarketplaceProvider({ children }: { children: React.ReactNode })
       isLoggedIn: true,
     };
     setUserProfile(updatedUser);
-    setCurrentAction(null); // Force action selection screen after every login
+    setCurrentAction(null); // Force action selection screen after login
     await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
     await AsyncStorage.removeItem(ACTION_STORAGE_KEY);
   };
@@ -359,7 +380,6 @@ export function MarketplaceProvider({ children }: { children: React.ReactNode })
     const targetJob = jobs.find(j => j.id === jobId);
     if (!targetJob) return;
 
-    // Check if contact record already exists
     const existing = contacts.find(c => c.jobId === jobId && c.interestedUserId === userProfile.userId);
     if (existing) return;
 
@@ -398,6 +418,7 @@ export function MarketplaceProvider({ children }: { children: React.ReactNode })
   const resetAllData = async () => {
     await AsyncStorage.clear();
     setUserProfile(DEFAULT_USER);
+    setHasCompletedOnboarding(false);
     setCurrentAction(null);
     setJobs(INITIAL_JOBS);
     setContacts(INITIAL_CONTACTS);
@@ -410,6 +431,9 @@ export function MarketplaceProvider({ children }: { children: React.ReactNode })
         loginUser,
         logoutUser,
         updateProfile,
+        hasCompletedOnboarding,
+        completeOnboarding,
+        resetOnboarding,
         currentAction,
         selectAction,
         jobs,
