@@ -1,40 +1,35 @@
 import React from 'react';
-import { View, StyleSheet, Text, Pressable } from 'react-native';
-import { Wrench, Plane } from 'lucide-react-native';
-import { useTheme } from '@/hooks/use-theme';
+import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Factory, Search } from 'lucide-react-native';
 import { useMarketplace } from '@/hooks/use-marketplace';
 
 export function RoleSelector() {
-  const theme = useTheme();
-  const { userRole, toggleRole } = useMarketplace();
+  const { currentAction, selectAction } = useMarketplace();
 
-  const isM = userRole === 'manufacturer';
+  const isPost = currentAction === 'POST_WORK';
+  const isFind = currentAction === 'FIND_WORK';
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundElement, borderColor: theme.cardBorder }]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Active role: Manufacturer. Press to toggle."
-        style={[styles.roleBtn, isM && { backgroundColor: theme.backgroundSelected }]}
-        onPress={isM ? undefined : toggleRole}
+    <View style={styles.container}>
+      <TouchableOpacity
+        style={[styles.roleBtn, isPost && styles.roleBtnActivePost]}
+        onPress={() => selectAction('POST_WORK')}
       >
-        <Wrench size={13} color={isM ? theme.primary : theme.textSecondary} />
-        <Text style={[styles.roleText, { color: isM ? theme.text : theme.textSecondary, fontWeight: isM ? '700' : '600' }]}>
-          Manufacturer
+        <Factory size={13} color={isPost ? '#2563EB' : '#64748B'} />
+        <Text style={[styles.roleText, isPost && styles.roleTextActivePost]}>
+          Post Work
         </Text>
-      </Pressable>
-      
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Active role: Exporter. Press to toggle."
-        style={[styles.roleBtn, !isM && { backgroundColor: theme.backgroundSelected }]}
-        onPress={!isM ? undefined : toggleRole}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.roleBtn, isFind && styles.roleBtnActiveFind]}
+        onPress={() => selectAction('FIND_WORK')}
       >
-        <Plane size={13} color={!isM ? theme.primary : theme.textSecondary} />
-        <Text style={[styles.roleText, { color: !isM ? theme.text : theme.textSecondary, fontWeight: !isM ? '700' : '600' }]}>
-          Exporter
+        <Search size={13} color={isFind ? '#16A34A' : '#64748B'} />
+        <Text style={[styles.roleText, isFind && styles.roleTextActiveFind]}>
+          Find Work
         </Text>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -43,22 +38,41 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignSelf: 'center',
+    backgroundColor: '#F1F5F9',
     borderRadius: 20,
-    borderWidth: 1,
     padding: 3,
     marginVertical: 4,
-    gap: 2,
-    zIndex: 10,
+    gap: 4,
   },
   roleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: 16,
     gap: 6,
   },
+  roleBtnActivePost: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#2563EB',
+  },
+  roleBtnActiveFind: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#16A34A',
+  },
   roleText: {
     fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  roleTextActivePost: {
+    color: '#2563EB',
+    fontWeight: '800',
+  },
+  roleTextActiveFind: {
+    color: '#16A34A',
+    fontWeight: '800',
   },
 });
