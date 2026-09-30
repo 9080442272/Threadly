@@ -1,327 +1,169 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, Platform, Modal } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { QrCode, FileText, Package, ArrowRightCircle } from 'lucide-react-native';
+import { Factory, Phone, MessageSquare, CheckCircle2, Clock, AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/hooks/use-theme';
-import { useMarketplace, Application, Order } from '@/hooks/use-marketplace';
+import { useMarketplace, JobStatus, ContactStatus } from '@/hooks/use-marketplace';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { GarmentScanner } from '@/components/GarmentScanner';
 
-type MainTab = 'applications' | 'orders';
-type AppStatusFilter = Application['status'] | 'all';
-type OrderStatusFilter = Order['status'] | 'all';
+type DashboardTab = 'posted' | 'contacted';
 
 export default function MyWorkScreen() {
   const theme = useTheme();
-  const { userRole, applications, orders, updateApplicationStatus, updateOrderProgress } = useMarketplace();
+  const { userProfile, jobs, contacts, updateJobStatus, updateContactStatus } = useMarketplace();
+  const [activeTab, setActiveTab] = useState<DashboardTab>('posted');
 
-  const [activeTab, setActiveTab] = useState<MainTab>('applications');
-  const [appFilter, setAppFilter] = useState<AppStatusFilter>('all');
-  const [orderFilter, setOrderFilter] = useState<OrderStatusFilter>('all');
-  const [showScanner, setShowScanner] = useState(false);
+  const myPostedJobs = jobs.filter(j => j.postedByUserId === userProfile.userId);
+  const myContactedJobs = contacts.filter(c => c.interestedUserId === userProfile.userId);
 
-  const handleScanCode = async (code: string) => {
-    setShowScanner(false);
-    const targetOrder = orders.find(o => o.id === code);
-    if (targetOrder) {
-      let nextProgress = targetOrder.progress + 20;
-      if (nextProgress > 100) nextProgress = 100;
-      
-      let nextStatus: Order['status'] = 'production';
-      if (nextProgress >= 100) nextStatus = 'completed';
-      else if (nextProgress >= 90) nextStatus = 'ready';
-      else if (nextProgress >= 70) nextStatus = 'quality-check';
+  const handleStatusChange = async (jobId: string, currentStatus: JobStatus) => {
+    const statuses: JobStatus[] = ['OPEN', 'IN_DISCUSSION', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+    const nextIdx = (statuses.indexOf(currentStatus) + 1) % (statuses.length - 1); // Cycle through non-cancelled
+    const nextStatus = statuses[nextIdx];
 
-      await updateOrderProgress(targetOrder.id, nextProgress, nextStatus);
-      alert(`✅ Scanned Garment Slip for "${targetOrder.opportunityTitle}"!\nProgress updated to ${nextProgress}% (${nextStatus.replace('-', ' ')}).`);
-    } else {
-      alert(`⚠️ Code Scanned: "${code}".\nNo matching active production order found.`);
-    }
+    await updateJobStatus(jobId, nextStatus);
+    Alert.alert('Status Updated', `Job status changed to ${nextStatus}`);
   };
 
-  // Filter applications
-  const filteredApps = applications.filter((app) => {
-    if (appFilter === 'all') return true;
-    return app.status === appFilter;
-  });
-
-  // Filter orders
-  const filteredOrders = orders.filter((order) => {
-    if (orderFilter === 'all') return true;
-    return order.status === orderFilter;
-  });
-
-  const getStatusColor = (status: Application['status'] | Order['status']) => {
+  const getStatusStyle = (status: JobStatus | ContactStatus) => {
     switch (status) {
-      case 'accepted':
-      case 'ready':
-      case 'completed':
-        return theme.success;
-      case 'shortlisted':
-      case 'negotiation':
-      case 'production':
-      case 'quality-check':
-        return theme.focus;
-      case 'submitted':
-      case 'upcoming':
-        return theme.primary;
-      case 'rejected':
-        return theme.timer;
+      case 'OPEN':
+      case 'INTERESTED':
+        return { bg: '#EFF6FF', text: '#2563EB' };
+      case 'IN_DISCUSSION':
+      case 'CONTACTED':
+        return { bg: '#FEF3C7', text: '#D97706' };
+      case 'ASSIGNED':
+      case 'IN_PROGRESS':
+        return { bg: '#E0F2FE', text: '#0284C7' };
+      case 'COMPLETED':
+      case 'ACCEPTED':
+        return { bg: '#DCFCE7', text: '#16A34A' };
+      case 'CANCELLED':
+      case 'REJECTED':
+        return { bg: '#FEE2E2', text: '#DC2626' };
       default:
-        return theme.textSecondary;
+        return { bg: '#F1F5F9', text: '#64748B' };
     }
-  };
-
-  const handleUpdateProgress = async (orderId: string, currentProgress: number) => {
-    let nextProgress = currentProgress + 10;
-    if (nextProgress > 100) nextProgress = 0;
-    
-    let nextStatus: Order['status'] = 'production';
-    if (nextProgress === 0) nextStatus = 'upcoming';
-    else if (nextProgress < 70) nextStatus = 'production';
-    else if (nextProgress < 90) nextStatus = 'quality-check';
-    else if (nextProgress < 100) nextStatus = 'ready';
-    else nextStatus = 'completed';
-
-    await updateOrderProgress(orderId, nextProgress, nextStatus);
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <SafeAreaView style={styles.safeArea}>
-        
-        {/* Page Title */}
+        {/* Title */}
         <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: theme.text }]}>My Work</Text>
-              <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                Monitor active contracts and production pipelines
-              </Text>
-            </View>
-            <Pressable 
-              style={[styles.scanIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.cardBorder }]}
-              onPress={() => setShowScanner(true)}
-            >
-              <QrCode size={15} color={theme.primary} />
-              <Text style={[styles.scanIconText, { color: theme.primary }]}>Scan Slip</Text>
-            </Pressable>
-          </View>
+          <Text style={[styles.title, { color: theme.text }]}>My Work Dashboard</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+            Track work requirements you posted and job works you contacted
+          </Text>
         </View>
 
-        {/* Core Segmented Control (Applications vs Orders) */}
-        <View style={[styles.segmentedBg, { backgroundColor: theme.backgroundElement }]}>
-          <Pressable
-            style={[styles.segButton, activeTab === 'applications' && { backgroundColor: theme.backgroundSelected }]}
-            onPress={() => setActiveTab('applications')}
+        {/* Tab Selector */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'posted' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('posted')}
           >
-            <Text style={[styles.segText, { color: activeTab === 'applications' ? theme.text : theme.textSecondary, fontWeight: activeTab === 'applications' ? '800' : '600' }]}>
-              Bids & Proposals ({applications.length})
+            <Text style={[styles.tabText, activeTab === 'posted' && styles.tabTextActive]}>
+              Work I Posted ({myPostedJobs.length})
             </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.segButton, activeTab === 'orders' && { backgroundColor: theme.backgroundSelected }]}
-            onPress={() => setActiveTab('orders')}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'contacted' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('contacted')}
           >
-            <Text style={[styles.segText, { color: activeTab === 'orders' ? theme.text : theme.textSecondary, fontWeight: activeTab === 'orders' ? '800' : '600' }]}>
-              Production Orders ({orders.length})
+            <Text style={[styles.tabText, activeTab === 'contacted' && styles.tabTextActive]}>
+              Work I Contacted ({myContactedJobs.length})
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
-        {/* Tab Filters */}
-        {activeTab === 'applications' ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-            {(['all', 'submitted', 'shortlisted', 'negotiation', 'accepted', 'rejected'] as AppStatusFilter[]).map((f) => {
-              const isSelected = appFilter === f;
-              return (
-                <Pressable
-                  key={f}
-                  style={[styles.filterChip, { backgroundColor: theme.backgroundElement }, isSelected && { backgroundColor: theme.backgroundSelected }]}
-                  onPress={() => setAppFilter(f)}
-                >
-                  <Text style={[styles.filterChipText, { color: isSelected ? theme.text : theme.textSecondary }]}>
-                    {f === 'all' ? 'All Bids' : f}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-            {(['all', 'upcoming', 'production', 'quality-check', 'ready', 'completed'] as OrderStatusFilter[]).map((f) => {
-              const isSelected = orderFilter === f;
-              return (
-                <Pressable
-                  key={f}
-                  style={[styles.filterChip, { backgroundColor: theme.backgroundElement }, isSelected && { backgroundColor: theme.backgroundSelected }]}
-                  onPress={() => setOrderFilter(f)}
-                >
-                  <Text style={[styles.filterChipText, { color: isSelected ? theme.text : theme.textSecondary }]}>
-                    {f === 'all' ? 'All Orders' : f.replace('-', ' ')}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-
-        {/* Main List Scroll */}
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
-          {/* APPLICATIONS PIPELINE */}
-          {activeTab === 'applications' && (
-            filteredApps.length === 0 ? (
-              <View style={styles.emptyState}>
-                <FileText size={28} color={theme.textSecondary} />
-                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No matching applications.</Text>
+          {/* TAB 1: WORK I POSTED */}
+          {activeTab === 'posted' && (
+            myPostedJobs.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Factory size={32} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Posted Requirements</Text>
+                <Text style={styles.emptySub}>
+                  When you post a job-work requirement, it will appear here so you can track its status.
+                </Text>
               </View>
             ) : (
-              filteredApps.map((app) => {
-                const statusColor = getStatusColor(app.status);
+              myPostedJobs.map(job => {
+                const st = getStatusStyle(job.status);
                 return (
-                  <View key={app.id} style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.cardBorder }]}>
+                  <View key={job.id} style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <Text style={[styles.cardTitle, { color: theme.text }]}>{app.opportunityTitle}</Text>
-                      <View style={[styles.statusBadge, { backgroundColor: `${statusColor}12` }]}>
-                        <Text style={[styles.statusText, { color: statusColor }]}>{app.status}</Text>
+                      <View style={styles.catTag}>
+                        <Text style={styles.catTagText}>{job.category} • {job.subcategory}</Text>
                       </View>
+                      <TouchableOpacity
+                        style={[styles.statusBadge, { backgroundColor: st.bg }]}
+                        onPress={() => handleStatusChange(job.id, job.status)}
+                      >
+                        <Text style={[styles.statusText, { color: st.text }]}>{job.status}</Text>
+                      </TouchableOpacity>
                     </View>
-                    
-                    <View style={styles.cardSpecs}>
-                      <Text style={[styles.specText, { color: theme.textSecondary }]}>
-                        Bid Rate: <Text style={{ color: theme.text, fontWeight: '700' }}>₹{app.proposedRate}/pc</Text>
-                      </Text>
-                      <Text style={[styles.specText, { color: theme.textSecondary }]}>
-                        Offered Qty: <Text style={{ color: theme.text, fontWeight: '700' }}>{app.capacityOffered.toLocaleString()} pcs</Text>
-                      </Text>
-                    </View>
-                    
-                    {app.notes && (
-                      <Text style={[styles.notesText, { color: theme.textSecondary, backgroundColor: theme.background }]}>
-                        "{app.notes}"
-                      </Text>
+
+                    <Text style={styles.quantityTitle}>{job.quantity.toLocaleString()} pcs</Text>
+                    {job.ratePerPiece && (
+                      <Text style={styles.rateText}>Target Rate: ₹{job.ratePerPiece} / pc</Text>
                     )}
 
-                    {/* Exporter role based decision actions (to test shortlisting/acceptance flows) */}
-                    {userRole === 'exporter' && app.status !== 'accepted' && app.status !== 'rejected' && (
-                      <View style={[styles.actionRow, { borderTopColor: theme.cardBorder }]}>
-                        {app.status === 'submitted' && (
-                          <Pressable
-                            style={[styles.actionBtn, { borderColor: theme.cardBorder }]}
-                            onPress={() => updateApplicationStatus(app.id, 'shortlisted')}
-                          >
-                            <Text style={[styles.actionBtnText, { color: theme.text }]}>Shortlist</Text>
-                          </Pressable>
-                        )}
-                        {(app.status === 'submitted' || app.status === 'shortlisted') && (
-                          <Pressable
-                            style={[styles.actionBtn, { borderColor: theme.cardBorder }]}
-                            onPress={() => updateApplicationStatus(app.id, 'negotiation')}
-                          >
-                            <Text style={[styles.actionBtnText, { color: theme.text }]}>Negotiate</Text>
-                          </Pressable>
-                        )}
-                        <Pressable
-                          style={[styles.actionBtn, { backgroundColor: theme.success }]}
-                          onPress={() => updateApplicationStatus(app.id, 'accepted')}
-                        >
-                          <Text style={styles.actionBtnTextWhite}>Accept Bid</Text>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.actionBtn, { backgroundColor: theme.timer }]}
-                          onPress={() => updateApplicationStatus(app.id, 'rejected')}
-                        >
-                          <Text style={styles.actionBtnTextWhite}>Reject</Text>
-                        </Pressable>
-                      </View>
-                    )}
+                    <View style={styles.specRow}>
+                      <Text style={styles.specItem}>📍 {job.location}</Text>
+                      <Text style={styles.specItem}>⏱ {job.deadlineDays} days</Text>
+                    </View>
+
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.tapTip}>Tap status badge to update pipeline status</Text>
+                    </View>
                   </View>
                 );
               })
             )
           )}
 
-          {/* ORDERS TRACKING PIPELINE */}
-          {activeTab === 'orders' && (
-            filteredOrders.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Package size={28} color={theme.textSecondary} />
-                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No active orders.</Text>
+          {/* TAB 2: WORK I CONTACTED */}
+          {activeTab === 'contacted' && (
+            myContactedJobs.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <MessageSquare size={32} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Inquired Jobs Yet</Text>
+                <Text style={styles.emptySub}>
+                  When you discover a job on the "Find Work" feed and contact the owner, it will be saved here.
+                </Text>
               </View>
             ) : (
-              filteredOrders.map((order) => {
-                const statusColor = getStatusColor(order.status);
+              myContactedJobs.map(contact => {
+                const st = getStatusStyle(contact.status);
                 return (
-                  <View key={order.id} style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.cardBorder }]}>
+                  <View key={contact.id} style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.cardTitle, { color: theme.text }]}>{order.opportunityTitle}</Text>
-                        <Text style={[styles.clientLabel, { color: theme.textSecondary }]}>
-                          {userRole === 'manufacturer' ? `Exporter: ${order.exporterName}` : `Manufacturer: ${order.manufacturerName}`}
-                        </Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: `${statusColor}12` }]}>
-                        <Text style={[styles.statusText, { color: statusColor }]}>{order.status.replace('-', ' ')}</Text>
+                      <Text style={styles.jobTitle}>{contact.jobTitle}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
+                        <Text style={[styles.statusText, { color: st.text }]}>{contact.status}</Text>
                       </View>
                     </View>
 
-                    <View style={styles.cardSpecs}>
-                      <Text style={[styles.specText, { color: theme.textSecondary }]}>
-                        Contract Qty: <Text style={{ color: theme.text, fontWeight: '700' }}>{order.quantity.toLocaleString()} pcs</Text>
-                      </Text>
-                      <Text style={[styles.specText, { color: theme.textSecondary }]}>
-                        Rate: <Text style={{ color: theme.text, fontWeight: '700' }}>₹{order.rate}/pc</Text>
-                      </Text>
-                      <Text style={[styles.specText, { color: theme.textSecondary }]}>
-                        Delivery: <Text style={{ color: theme.text, fontWeight: '700' }}>{order.endDate}</Text>
-                      </Text>
-                    </View>
-
-                    {/* Progress slider tracking */}
-                    <View style={styles.progressSection}>
-                      <View style={styles.progressTextRow}>
-                        <Text style={[styles.progressLabel, { color: theme.textSecondary }]}>Production Progress</Text>
-                        <Text style={[styles.progressVal, { color: theme.text }]}>{order.progress}%</Text>
-                      </View>
-                      <View style={[styles.progressBarBg, { backgroundColor: theme.backgroundSelected }]}>
-                        <View style={[styles.progressBarFill, { backgroundColor: statusColor, width: `${order.progress}%` }]} />
-                      </View>
-                    </View>
-
-                    {/* Manufacturer Action: Update order tracking progress */}
-                    {userRole === 'manufacturer' && order.status !== 'completed' && (
-                      <Pressable
-                        style={[styles.updateProgressBtn, { backgroundColor: theme.primary }]}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        onPress={() => handleUpdateProgress(order.id, order.progress)}
-                      >
-                        <ArrowRightCircle size={14} color="#ffffff" />
-                        <Text style={styles.updateProgressText}>Log Production Step (+10%)</Text>
-                      </Pressable>
+                    <Text style={styles.companySub}>Posted by: {contact.jobPostedByCompany}</Text>
+                    {contact.notes && (
+                      <Text style={styles.notesBox}>"{contact.notes}"</Text>
                     )}
+
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.timestampText}>
+                        Contacted: {new Date(contact.timestamp).toLocaleDateString()}
+                      </Text>
+                    </View>
                   </View>
                 );
               })
             )
           )}
         </ScrollView>
-
-        {/* Live / Simulated QR Scanner Modal */}
-        <Modal
-          visible={showScanner}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setShowScanner(false)}
-        >
-          <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-            <GarmentScanner 
-              onScan={handleScanCode} 
-              onClose={() => setShowScanner(false)} 
-            />
-          </SafeAreaView>
-        </Modal>
-
       </SafeAreaView>
     </View>
   );
@@ -330,8 +172,8 @@ export default function MyWorkScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
     flexDirection: 'row',
+    justifyContent: 'center',
   },
   safeArea: {
     flex: 1,
@@ -348,192 +190,151 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtitle: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
     marginTop: 2,
   },
-  segmentedBg: {
+  tabBar: {
     flexDirection: 'row',
     marginHorizontal: Spacing.four,
-    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
     padding: 3,
     marginBottom: 12,
   },
-  segButton: {
+  tabBtn: {
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 12,
-  },
-  segText: {
-    fontSize: 12,
-  },
-  filterScroll: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: Spacing.four,
-    marginBottom: 8,
-    paddingBottom: 4,
-  },
-  filterChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
     borderRadius: 10,
   },
-  filterChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'capitalize',
+  tabBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  tabTextActive: {
+    color: '#2563EB',
+    fontWeight: '800',
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.one,
     paddingBottom: BottomTabInset + Spacing.five,
   },
-  emptyState: {
+  emptyCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    marginTop: 20,
     gap: 8,
   },
-  emptyText: {
-    fontSize: 13,
-    fontWeight: '500',
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  emptySub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 16,
-    borderRadius: 20,
+    marginBottom: 12,
     borderWidth: 1,
-    marginVertical: 8,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: '#E2E8F0',
+    gap: 8,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 8,
+    alignItems: 'center',
   },
-  cardTitle: {
-    fontSize: 16,
+  catTag: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  catTagText: {
+    fontSize: 11,
     fontWeight: '800',
-  },
-  clientLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 2,
+    color: '#2563EB',
   },
   statusBadge: {
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    textTransform: 'uppercase',
   },
-  cardSpecs: {
+  quantityTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  rateText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  specRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
+    gap: 16,
   },
-  specText: {
+  specItem: {
     fontSize: 12,
-    fontWeight: '500',
+    color: '#64748B',
   },
-  notesText: {
-    padding: 10,
-    borderRadius: 10,
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '500',
-    fontStyle: 'italic',
-  },
-  actionRow: {
-    flexDirection: 'row',
+  cardFooter: {
     borderTopWidth: 1,
-    paddingTop: 12,
-    gap: 6,
-    justifyContent: 'flex-end',
-  },
-  actionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  actionBtnTextWhite: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  progressSection: {
-    gap: 6,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 8,
     marginTop: 4,
   },
-  progressTextRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  tapTip: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
-  progressLabel: {
-    fontSize: 11,
+  jobTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+    marginRight: 8,
+  },
+  companySub: {
+    fontSize: 12,
+    color: '#64748B',
     fontWeight: '600',
   },
-  progressVal: {
+  notesBox: {
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 8,
     fontSize: 12,
-    fontWeight: '800',
+    color: '#334155',
+    fontStyle: 'italic',
   },
-  progressBarBg: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  updateProgressBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    height: 36,
-    borderRadius: 10,
-    marginTop: 6,
-  },
-  updateProgressText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-  },
-  scanIconBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  scanIconText: {
-    fontSize: 12,
-    fontWeight: '700',
+  timestampText: {
+    fontSize: 11,
+    color: '#94A3B8',
   },
 });
